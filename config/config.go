@@ -30,6 +30,8 @@ type Config struct {
 	} `mapstructure:"metrics"`
 	Log struct {
 		Path       string `mapstructure:"path"`
+		Format     string `mapstructure:"format"` // 新增：日志格式配置
+		Level      string `mapstructure:"level"`  // 新增：日志级别配置
 		MaxSize    int    `mapstructure:"max_size"`
 		MaxBackups int    `mapstructure:"max_backups"`
 		MaxAge     int    `mapstructure:"max_age"`

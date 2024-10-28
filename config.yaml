@@ -33,9 +33,11 @@ metrics:
 
 log:
   path: "logs/clamguardian.log"
-  max_size: 100    # MB
+  format: "json"  # 可选值: "text" 或 "json"
+  level: "info"   # 可选值: "debug", "info", "warn", "error"
+  max_size: 100
   max_backups: 3
-  max_age: 7       # 天
+  max_age: 7
 
 status:
   interval: 10     # 秒

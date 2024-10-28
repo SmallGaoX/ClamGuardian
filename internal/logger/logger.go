@@ -8,44 +8,109 @@ import (
 
 var Logger *zap.Logger
 
+// LogFormat 日志格式类型
+type LogFormat string
+
+const (
+	FormatText LogFormat = "text"
+	FormatJSON LogFormat = "json"
+)
+
+// LogConfig 日志配置
+type LogConfig struct {
+	Path       string    // 日志文件路径
+	Format     LogFormat // 日志格式：text 或 json
+	MaxSize    int       // 每个日志文件的最大大小（MB）
+	MaxBackups int       // 保留的旧文件最大数量
+	MaxAge     int       // 保留的旧文件最大天数
+	Level      string    // 日志级别：debug, info, warn, error
+}
+
 func init() {
-	// 创建一个默认的控制台 logger，避免在正式初始化前使用时崩溃
+	// 创建一个默认的控制台 logger
 	Logger, _ = zap.NewDevelopment()
 }
 
 // InitLogger 初始化日志配置
-func InitLogger(logPath string, maxSize, maxBackups, maxAge int) {
+func InitLogger(config LogConfig) error {
 	// 配置 lumberjack
 	w := &lumberjack.Logger{
-		Filename:   logPath,
-		MaxSize:    maxSize,    // 每个日志文件最大尺寸（MB）
-		MaxBackups: maxBackups, // 保留的旧文件最大数量
-		MaxAge:     maxAge,     // 保留的旧文件最大天数
-		Compress:   true,       // 是否压缩旧文件
+		Filename:   config.Path,
+		MaxSize:    config.MaxSize,
+		MaxBackups: config.MaxBackups,
+		MaxAge:     config.MaxAge,
+		Compress:   true,
 	}
 
-	// 配置 encoder
+	// 设置日志级别
+	var level zapcore.Level
+	switch config.Level {
+	case "debug":
+		level = zapcore.DebugLevel
+	case "info":
+		level = zapcore.InfoLevel
+	case "warn":
+		level = zapcore.WarnLevel
+	case "error":
+		level = zapcore.ErrorLevel
+	default:
+		level = zapcore.InfoLevel
+	}
+
+	// 根据日志级别配置 encoder
 	encoderConfig := zapcore.EncoderConfig{
 		TimeKey:        "time",
 		LevelKey:       "level",
 		NameKey:        "logger",
-		CallerKey:      "caller",
 		MessageKey:     "msg",
 		StacktraceKey:  "stacktrace",
 		LineEnding:     zapcore.DefaultLineEnding,
 		EncodeLevel:    zapcore.LowercaseLevelEncoder,
 		EncodeTime:     zapcore.ISO8601TimeEncoder,
 		EncodeDuration: zapcore.SecondsDurationEncoder,
-		EncodeCaller:   zapcore.ShortCallerEncoder,
+	}
+
+	// 只在 debug 级别时添加 caller 和 func 信息
+	if level == zapcore.DebugLevel {
+		encoderConfig.CallerKey = "caller"
+		encoderConfig.FunctionKey = "func"
+		encoderConfig.EncodeCaller = zapcore.ShortCallerEncoder
+	}
+
+	// 根据配置选择编码器
+	var encoder zapcore.Encoder
+	switch config.Format {
+	case FormatJSON:
+		encoder = zapcore.NewJSONEncoder(encoderConfig)
+	default: // FormatText
+		if level == zapcore.DebugLevel {
+			encoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+		} else {
+			encoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
+		}
+		encoder = zapcore.NewConsoleEncoder(encoderConfig)
 	}
 
 	// 创建 core
 	core := zapcore.NewCore(
-		zapcore.NewJSONEncoder(encoderConfig),
-		zapcore.AddSync(w),
-		zap.InfoLevel,
+		encoder,
+		zapcore.NewMultiWriteSyncer(zapcore.AddSync(w)),
+		level,
 	)
 
-	// 创建新的 logger 并替换全局变量
-	Logger = zap.New(core, zap.AddCaller())
+	// 创建 logger，只在 debug 级别时添加 caller
+	var options []zap.Option
+	if level == zapcore.DebugLevel {
+		options = append(options,
+			zap.AddCaller(),
+			zap.AddCallerSkip(1),
+		)
+	}
+	// 添加错误级别的堆栈跟踪
+	options = append(options, zap.AddStacktrace(zapcore.ErrorLevel))
+
+	// 创建 logger
+	Logger = zap.New(core, options...)
+
+	return nil
 }

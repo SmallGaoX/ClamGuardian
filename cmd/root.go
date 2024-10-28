@@ -132,12 +132,17 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	// 初始化日志系统
-	logger.InitLogger(
-		cfg.Log.Path,
-		cfg.Log.MaxSize,
-		cfg.Log.MaxBackups,
-		cfg.Log.MaxAge,
-	)
+	err = logger.InitLogger(logger.LogConfig{
+		Path:       cfg.Log.Path,
+		Format:     logger.LogFormat(cfg.Log.Format),
+		Level:      cfg.Log.Level,
+		MaxSize:    cfg.Log.MaxSize,
+		MaxBackups: cfg.Log.MaxBackups,
+		MaxAge:     cfg.Log.MaxAge,
+	})
+	if err != nil {
+		return fmt.Errorf("初始化日志失败: %v", err)
+	}
 	defer logger.Logger.Sync()
 
 	// 现在可以安全地使用 logger
