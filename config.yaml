@@ -25,3 +25,17 @@ system:
   memory_limit: 100
   # 读取缓冲区大小（bytes）
   buffer_size: 4096
+
+metrics:
+  enabled: true
+  port: 2112
+  path: "/metrics"
+
+log:
+  path: "logs/clamguardian.log"
+  max_size: 100    # MB
+  max_backups: 3
+  max_age: 7       # 天
+
+status:
+  interval: 10     # 秒

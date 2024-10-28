@@ -1,8 +1,9 @@
 package config
 
 import (
-	"ClamGuardian/internal/matcher"
 	"fmt"
+
+	"ClamGuardian/internal/matcher"
 	"github.com/spf13/viper"
 )
 
@@ -22,6 +23,20 @@ type Config struct {
 		MemoryLimit int64 `mapstructure:"memory_limit"`
 		BufferSize  int   `mapstructure:"buffer_size"`
 	} `mapstructure:"system"`
+	Metrics struct {
+		Enabled bool   `mapstructure:"enabled"`
+		Port    int    `mapstructure:"port"`
+		Path    string `mapstructure:"path"`
+	} `mapstructure:"metrics"`
+	Log struct {
+		Path       string `mapstructure:"path"`
+		MaxSize    int    `mapstructure:"max_size"`
+		MaxBackups int    `mapstructure:"max_backups"`
+		MaxAge     int    `mapstructure:"max_age"`
+	} `mapstructure:"log"`
+	Status struct {
+		Interval int `mapstructure:"interval"` // 状态收集间隔(秒)
+	} `mapstructure:"status"`
 }
 
 // LoadConfig 加载配置文件

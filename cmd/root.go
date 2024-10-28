@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"runtime"
@@ -10,11 +11,15 @@ import (
 	"time"
 
 	"ClamGuardian/config"
+	"ClamGuardian/internal/logger"
 	"ClamGuardian/internal/matcher"
 	"ClamGuardian/internal/monitor"
 	"ClamGuardian/internal/position"
+	"ClamGuardian/internal/status"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 )
 
 var (
@@ -128,6 +133,15 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("加载配置失败: %v", err)
 	}
 
+	// 初始化日志
+	logger.InitLogger(
+		cfg.Log.Path,
+		cfg.Log.MaxSize,
+		cfg.Log.MaxBackups,
+		cfg.Log.MaxAge,
+	)
+	defer logger.Logger.Sync()
+
 	// 创建位置管理器
 	pm, err := position.NewManager(cfg.Position.StorePath, cfg.Position.UpdateInterval)
 	if err != nil {
@@ -146,16 +160,34 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("创建监控器失败: %v", err)
 	}
 
-	// 设置上下文和信号处理
+	// 启动内存监控
+	go monitorMemory(cfg.System.MemoryLimit)
+
+	// 创建一个带取消的上下文
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	// 启动内存监控
-	go monitorMemory(ctx, cfg.System.MemoryLimit)
 
 	// 启动文件监控
 	if err := mon.Start(ctx); err != nil {
 		return fmt.Errorf("启动监控失败: %v", err)
+	}
+
+	// 启动状态监控
+	statusMonitor, err := status.NewMonitor(time.Duration(cfg.Status.Interval) * time.Second)
+	if err != nil {
+		return fmt.Errorf("创建状态监控失败: %v", err)
+	}
+	statusMonitor.Start()
+	defer statusMonitor.Stop()
+
+	// 如果启用了指标收集，启动 Prometheus 服务器
+	if cfg.Metrics.Enabled {
+		go func() {
+			http.Handle(cfg.Metrics.Path, promhttp.Handler())
+			if err := http.ListenAndServe(fmt.Sprintf(":%d", cfg.Metrics.Port), nil); err != nil {
+				logger.Logger.Error("metrics服务器启动失败", zap.Error(err))
+			}
+		}()
 	}
 
 	// 等待信号
@@ -167,7 +199,7 @@ func run(cmd *cobra.Command, args []string) error {
 }
 
 // monitorMemory 监控内存使用
-func monitorMemory(ctx context.Context, limit int64) {
+func monitorMemory(limit int64) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -183,7 +215,7 @@ func monitorMemory(ctx context.Context, limit int64) {
 				runtime.GC()
 			}
 
-		case <-ctx.Done():
+		case <-time.After(5 * time.Second):
 			return
 		}
 	}

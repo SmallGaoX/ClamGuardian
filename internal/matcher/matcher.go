@@ -5,6 +5,10 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+
+	"ClamGuardian/internal/logger"
+	"ClamGuardian/internal/metrics"
+	"go.uber.org/zap"
 )
 
 // MatchRule 定义匹配规则的结构
@@ -79,7 +83,10 @@ func (m *Matcher) ProcessFile(filename string, offset int64) (int64, error) {
 func (m *Matcher) matchLine(line string) {
 	for _, rule := range m.rules {
 		if rule.Pattern.MatchString(line) {
-			fmt.Printf("[%s] 匹配到告警: %s\n", rule.Level, line)
+			metrics.RuleMatches.WithLabelValues(rule.Level).Inc()
+			logger.Logger.Info("匹配到告警",
+				zap.String("level", rule.Level),
+				zap.String("content", line))
 		}
 	}
 }
