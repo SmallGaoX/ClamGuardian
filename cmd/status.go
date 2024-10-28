@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -79,7 +80,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("读取metrics响应失败: %v", err)
 	}
 
-	// 输出状态信息到控制台
+	// 输出基本状态信息
 	fmt.Println("=== ClamGuardian 运行状态 ===")
 	fmt.Printf("内存使用: %.2f MB\n", memoryUsage/(1024*1024))
 	fmt.Printf("CPU使用率: %.1f%%\n", cpuUsage)
@@ -87,5 +88,67 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	fmt.Printf("规则匹配数: %d\n", matchCount)
 	fmt.Printf("最后更新时间: %s\n", time.Now().Format("2006-01-02 15:04:05"))
 
+	// 获取文件监控状态
+	fmt.Println("\n=== 文件监控状态 ===")
+	fileResp, err := http.Get(fmt.Sprintf("http://localhost:%d/files", 2112))
+	if err != nil {
+		fmt.Println("无法获取文件监控状态")
+		return nil // 继续显示其他信息
+	}
+	defer fileResp.Body.Close()
+
+	if fileResp.StatusCode != http.StatusOK {
+		fmt.Println("获取文件监控状态失败")
+		return nil
+	}
+
+	var files []struct {
+		Filename string  `json:"filename"`
+		Position int64   `json:"position"`
+		Size     int64   `json:"size"`
+		Progress float64 `json:"progress"`
+	}
+
+	if err := json.NewDecoder(fileResp.Body).Decode(&files); err != nil {
+		fmt.Println("解析文件监控状态失败")
+		return nil
+	}
+
+	// 输出文件状态
+	if len(files) == 0 {
+		fmt.Println("当前没有监控的文件")
+		return nil
+	}
+
+	fmt.Printf("\n%-50s %-15s %-15s %s\n", "文件名", "当前位置", "文件大小", "进度")
+	fmt.Println(strings.Repeat("-", 90))
+	for _, file := range files {
+		filename := file.Filename
+		if len(filename) > 50 {
+			filename = "..." + filename[len(filename)-47:]
+		}
+		fmt.Printf("%-50s %-15s %-15s %.1f%%\n",
+			filename,
+			formatBytes(file.Position),
+			formatBytes(file.Size),
+			file.Progress*100,
+		)
+	}
+
 	return nil
+}
+
+// formatBytes 格式化字节数
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB",
+		float64(bytes)/float64(div), "KMGTPE"[exp])
 }

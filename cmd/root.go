@@ -13,6 +13,7 @@ import (
 	"ClamGuardian/config"
 	"ClamGuardian/internal/logger"
 	"ClamGuardian/internal/matcher"
+	"ClamGuardian/internal/metrics"
 	"ClamGuardian/internal/monitor"
 	"ClamGuardian/internal/position"
 	"ClamGuardian/internal/status"
@@ -198,16 +199,19 @@ func run(cmd *cobra.Command, args []string) error {
 	statusMonitor.Start()
 	defer statusMonitor.Stop()
 
-	// 如果启用了指标收集，启动 Prometheus 服务器
+	// 如果启用了指标收集，启动 HTTP 服务器
 	if cfg.Metrics.Enabled {
+		http.Handle(cfg.Metrics.Path, promhttp.Handler())
+		// 添加文件状态端点
+		http.Handle("/files", metrics.FileStatusHandler(pm))
+
 		go func() {
-			http.Handle(cfg.Metrics.Path, promhttp.Handler())
 			addr := fmt.Sprintf(":%d", cfg.Metrics.Port)
-			logger.Logger.Info("启动metrics服务",
+			logger.Logger.Info("启动HTTP服务",
 				zap.String("address", addr),
-				zap.String("path", cfg.Metrics.Path))
+				zap.String("metrics_path", cfg.Metrics.Path))
 			if err := http.ListenAndServe(addr, nil); err != nil {
-				logger.Logger.Error("metrics服务器启动失败", zap.Error(err))
+				logger.Logger.Error("HTTP服务器启动失败", zap.Error(err))
 			}
 		}()
 	}

@@ -106,3 +106,30 @@ func (m *Manager) RemovePosition(filename string) {
 	defer m.mu.Unlock()
 	delete(m.positions, filename)
 }
+
+// FilePosition 文件位置信息
+type FilePosition struct {
+	Filename string
+	Position int64
+	FileSize int64
+}
+
+// GetAllPositions 获取所有文件的位置信息
+func (m *Manager) GetAllPositions() []FilePosition {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	positions := make([]FilePosition, 0, len(m.positions))
+	for filename, pos := range m.positions {
+		fileInfo, err := os.Stat(filename)
+		if err != nil {
+			continue // 跳过无法访问的文件
+		}
+		positions = append(positions, FilePosition{
+			Filename: filename,
+			Position: pos,
+			FileSize: fileInfo.Size(),
+		})
+	}
+	return positions
+}
