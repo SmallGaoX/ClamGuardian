@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"ClamGuardian/config"
 	"ClamGuardian/internal/logger"
 	"ClamGuardian/internal/metrics"
 	"github.com/shirou/gopsutil/v3/cpu"
@@ -18,11 +19,11 @@ type Monitor struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
 	interval time.Duration
+	config   *config.Config // 添加配置信息
 }
 
 // NewMonitor 创建新的状态监控器
-func NewMonitor(interval time.Duration) (*Monitor, error) {
-	// 使用 os.Getpid() 替代 process.GetCurrentPid()
+func NewMonitor(interval time.Duration, cfg *config.Config) (*Monitor, error) {
 	proc, err := process.NewProcess(int32(os.Getpid()))
 	if err != nil {
 		return nil, err
@@ -34,6 +35,7 @@ func NewMonitor(interval time.Duration) (*Monitor, error) {
 		ctx:      ctx,
 		cancel:   cancel,
 		interval: interval,
+		config:   cfg,
 	}, nil
 }
 
@@ -85,18 +87,24 @@ func (m *Monitor) collect() {
 
 // StatusInfo 状态信息结构
 type StatusInfo struct {
-	Timestamp   time.Time `json:"timestamp"`
-	MemoryUsage uint64    `json:"memory_usage"`
-	CPUPercent  float64   `json:"cpu_percent"`
-	NumFiles    int       `json:"num_files"`
-	NumMatches  int64     `json:"num_matches"`
-	UptimeHours float64   `json:"uptime_hours"`
+	Timestamp      time.Time
+	MemoryUsage    uint64
+	CPUPercent     float64
+	NumFiles       int
+	NumMatches     int64
+	UptimeHours    float64
+	MetricsEnabled bool
+	MetricsPort    int
+	MetricsPath    string
 }
 
 // GetCurrentStatus 获取当前状态信息
 func (m *Monitor) GetCurrentStatus() (*StatusInfo, error) {
 	info := &StatusInfo{
-		Timestamp: time.Now(),
+		Timestamp:      time.Now(),
+		MetricsEnabled: m.config.Metrics.Enabled,
+		MetricsPort:    m.config.Metrics.Port,
+		MetricsPath:    m.config.Metrics.Path,
 	}
 
 	// 获取内存使用情况
@@ -114,6 +122,10 @@ func (m *Monitor) GetCurrentStatus() (*StatusInfo, error) {
 		uptime := time.Since(time.Unix(createTime/1000, 0))
 		info.UptimeHours = uptime.Hours()
 	}
+
+	// 获取监控文件数和匹配数
+	// 这里需要从 monitor 和 matcher 组件获取相关统计信息
+	// TODO: 实现文件数和匹配数的统计
 
 	return info, nil
 }

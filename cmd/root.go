@@ -173,7 +173,10 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	// 启动状态监控
-	statusMonitor, err := status.NewMonitor(time.Duration(cfg.Status.Interval) * time.Second)
+	statusMonitor, err := status.NewMonitor(
+		time.Duration(cfg.Status.Interval)*time.Second,
+		cfg, // 传入配置对象
+	)
 	if err != nil {
 		return fmt.Errorf("创建状态监控失败: %v", err)
 	}
