@@ -127,6 +127,7 @@ func Execute() error {
 
 func run(cmd *cobra.Command, args []string) error {
 	// 加载配置
+	err := error(nil)
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return fmt.Errorf("加载配置失败: %v", err)
@@ -136,7 +137,12 @@ func run(cmd *cobra.Command, args []string) error {
 	if err := writePID(cfg.System.PidFile); err != nil {
 		return err
 	}
-	defer os.Remove(cfg.System.PidFile) // 程序退出时删除 PID 文件
+	defer func(name string) {
+		err := os.Remove(name)
+		if err != nil {
+			logger.Logger.Error("删除 PID 文件失败", zap.Error(err))
+		}
+	}(cfg.System.PidFile) // 程序退出时删除 PID 文件
 
 	// 初始化日志系统
 	err = logger.InitLogger(logger.LogConfig{
@@ -150,7 +156,12 @@ func run(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("初始化日志失败: %v", err)
 	}
-	defer logger.Logger.Sync()
+	defer func(Logger *zap.Logger) {
+		err := Logger.Sync()
+		if err != nil {
+			logger.Logger.Error("日志同步失败", zap.Error(err))
+		}
+	}(logger.Logger)
 
 	// 现在可以安全地使用 logger
 	logger.Logger.Info("应用启动",
@@ -187,7 +198,7 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("启动监控失败: %v", err)
 	}
 
-	// 启动状态监控
+	// 创建状态监控器
 	statusMonitor, err := status.NewMonitor(
 		time.Duration(cfg.Status.Interval)*time.Second,
 		cfg,
@@ -196,8 +207,8 @@ func run(cmd *cobra.Command, args []string) error {
 		logger.Logger.Error("创建状态监控失败", zap.Error(err))
 		return fmt.Errorf("创建状态监控失败: %v", err)
 	}
-	statusMonitor.Start()
-	defer statusMonitor.Stop()
+	statusMonitor.Start()      // 确保状态监控器已启动
+	defer statusMonitor.Stop() // 确保在程序退出时停止监控
 
 	// 如果启用了指标收集，启动 HTTP 服务器
 	if cfg.Metrics.Enabled {

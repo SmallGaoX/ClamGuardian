@@ -9,7 +9,11 @@ import (
 	"strings"
 	"time"
 
+	"ClamGuardian/config"
+	"ClamGuardian/internal/logger"
+	"ClamGuardian/internal/status"
 	"github.com/spf13/cobra"
+	"go.uber.org/zap"
 )
 
 var statusCmd = &cobra.Command{
@@ -23,6 +27,29 @@ func init() {
 }
 
 func runStatus(cmd *cobra.Command, args []string) error {
+
+	cfg, err := config.LoadConfig()
+	statusMonitors, _ := status.NewMonitor(
+		time.Duration(cfg.Status.Interval)*time.Second,
+		cfg,
+	)
+	fmt.Println("正在获取状态信息...")
+
+	// 如果monitor没有返回错误就继续
+	if currentStatus, err := statusMonitors.GetCurrentStatus(); err == nil {
+		fmt.Println("=== ClamGuardian 运行状态 ===")
+		fmt.Printf("内存使用: %.2f MB\n", currentStatus.MemoryUsage/(1024*1024))
+		fmt.Printf("CPU使用率: %.1f%%\n", currentStatus.CPUPercent)
+		fmt.Printf("监控文件数: %d\n", currentStatus.NumFiles)
+		fmt.Printf("规则匹配数: %d\n", currentStatus.NumMatches)
+		fmt.Printf("最后更新时间: %s\n", currentStatus.UptimeHours)
+		fmt.Printf("是否启用监控: %d\n", currentStatus.MetricsEnabled)
+		fmt.Printf("监控端口: %d\n", currentStatus.MetricsPort)
+		fmt.Printf("监控路径: %d\n", currentStatus.MetricsPath)
+	} else {
+		logger.Logger.Error("获取状态失败: %v", zap.String("error", err.Error()))
+	}
+
 	// 尝试连接到运行中的实例获取状态
 	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/metrics", 2112)) // 使用默认的 metrics 端口
 	if err != nil {
