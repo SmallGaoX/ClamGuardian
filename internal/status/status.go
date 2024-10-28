@@ -8,6 +8,8 @@ import (
 	"ClamGuardian/config"
 	"ClamGuardian/internal/logger"
 	"ClamGuardian/internal/metrics"
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/process"
 	"go.uber.org/zap"
@@ -123,9 +125,33 @@ func (m *Monitor) GetCurrentStatus() (*StatusInfo, error) {
 		info.UptimeHours = uptime.Hours()
 	}
 
-	// 获取监控文件数和匹配数
-	// 这里需要从 monitor 和 matcher 组件获取相关统计信息
-	// TODO: 实现文件数和匹配数的统计
+	// 获取 metrics 数据
+	metricCh := make(chan prometheus.Metric, 1)
+
+	// 获取处理的文件数
+	metrics.ProcessedFiles.Collect(metricCh)
+	metric, ok := <-metricCh
+	if ok {
+		var m dto.Metric
+		if err := metric.Write(&m); err == nil && m.Counter != nil {
+			info.NumFiles = int(*m.Counter.Value)
+		}
+	}
+
+	// 获取规则匹配总数
+	var totalMatches float64
+	metrics.RuleMatches.Collect(metricCh)
+	for {
+		metric, ok := <-metricCh
+		if !ok {
+			break
+		}
+		var m dto.Metric
+		if err := metric.Write(&m); err == nil && m.Counter != nil {
+			totalMatches += *m.Counter.Value
+		}
+	}
+	info.NumMatches = int64(totalMatches)
 
 	return info, nil
 }

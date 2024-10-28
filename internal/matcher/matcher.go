@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sync"
 
 	"ClamGuardian/internal/logger"
 	"ClamGuardian/internal/metrics"
@@ -27,6 +28,8 @@ type Rule struct {
 type Matcher struct {
 	rules      []Rule
 	bufferSize int
+	matchCount int64
+	mu         sync.RWMutex
 }
 
 // NewMatcher 创建新的匹配器
@@ -79,10 +82,21 @@ func (m *Matcher) ProcessFile(filename string, offset int64) (int64, error) {
 	return newOffset, nil
 }
 
+// GetMatchCount 获取总匹配次数
+func (m *Matcher) GetMatchCount() int64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.matchCount
+}
+
 // matchLine 匹配单行内容
 func (m *Matcher) matchLine(line string) {
 	for _, rule := range m.rules {
 		if rule.Pattern.MatchString(line) {
+			m.mu.Lock()
+			m.matchCount++
+			m.mu.Unlock()
+
 			metrics.RuleMatches.WithLabelValues(rule.Level).Inc()
 			logger.Logger.Info("匹配到告警",
 				zap.String("level", rule.Level),

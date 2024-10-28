@@ -8,6 +8,7 @@ import (
 
 	"ClamGuardian/internal/logger"
 	"ClamGuardian/internal/matcher"
+	"ClamGuardian/internal/metrics"
 	"ClamGuardian/internal/position"
 	"github.com/fsnotify/fsnotify"
 	"go.uber.org/zap"
@@ -21,7 +22,8 @@ type Monitor struct {
 	matcher    *matcher.Matcher
 	posManager *position.Manager
 	bufferSize int
-	mu         sync.Mutex
+	mu         sync.RWMutex
+	fileCount  int
 }
 
 // NewMonitor 创建新的监控器
@@ -130,6 +132,10 @@ func (m *Monitor) handleFileWrite(filename string) {
 
 // handleFileCreate 处理文件创建事件
 func (m *Monitor) handleFileCreate(filename string) {
+	m.mu.Lock()
+	m.fileCount++
+	m.mu.Unlock()
+
 	logger.Logger.Info("检测到新文件",
 		zap.String("filename", filename))
 
@@ -147,10 +153,15 @@ func (m *Monitor) handleFileCreate(filename string) {
 			zap.String("filename", filename),
 			zap.Error(err))
 	}
+	metrics.ProcessedFiles.Inc()
 }
 
 // handleFileRemove 处理文件删除事件
 func (m *Monitor) handleFileRemove(filename string) {
+	m.mu.Lock()
+	m.fileCount--
+	m.mu.Unlock()
+
 	logger.Logger.Info("文件被删除",
 		zap.String("filename", filename))
 	m.watcher.Remove(filename)
@@ -160,4 +171,11 @@ func (m *Monitor) handleFileRemove(filename string) {
 // Stop 停止监控
 func (m *Monitor) Stop() error {
 	return m.watcher.Close()
+}
+
+// GetFileCount 获取当前监控的文件数
+func (m *Monitor) GetFileCount() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.fileCount
 }
