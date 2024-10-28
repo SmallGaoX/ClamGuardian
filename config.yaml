@@ -1,0 +1,27 @@
+monitor:
+  # 要监控的目录路径
+  paths:
+    - "/var/log"
+  # 文件匹配模式
+  patterns:
+    - "*.log"
+  
+matcher:
+  # 正则表达式规则
+  rules:
+    - pattern: "error.*"
+      level: "error"
+    - pattern: "warning.*"
+      level: "warning"
+
+position:
+  # 文件位置记录文件
+  store_path: "positions.json"
+  # 更新间隔（秒）
+  update_interval: 5
+
+system:
+  # 内存限制（MB）
+  memory_limit: 100
+  # 读取缓冲区大小（bytes）
+  buffer_size: 4096
