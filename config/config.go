@@ -20,8 +20,9 @@ type Config struct {
 		UpdateInterval int    `mapstructure:"update_interval"`
 	} `mapstructure:"position"`
 	System struct {
-		MemoryLimit int64 `mapstructure:"memory_limit"`
-		BufferSize  int   `mapstructure:"buffer_size"`
+		MemoryLimit int64  `mapstructure:"memory_limit"`
+		BufferSize  int    `mapstructure:"buffer_size"`
+		PidFile     string `mapstructure:"pid_file"` // 新增：PID文件路径
 	} `mapstructure:"system"`
 	Metrics struct {
 		Enabled bool   `mapstructure:"enabled"`
@@ -46,6 +47,11 @@ func LoadConfig() (*Config, error) {
 	var config Config
 	if err := viper.Unmarshal(&config); err != nil {
 		return nil, fmt.Errorf("无法解析配置: %v", err)
+	}
+
+	// 设置默认PID文件路径
+	if config.System.PidFile == "" {
+		config.System.PidFile = "/var/run/clamguardian.pid"
 	}
 
 	// 验证必要的配置

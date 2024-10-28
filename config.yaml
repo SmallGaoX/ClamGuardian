@@ -18,13 +18,14 @@ position:
   # 文件位置记录文件
   store_path: "positions.json"
   # 更新间隔（秒）
-  update_interval: 5
+  update_interval: 2
 
 system:
   # 内存限制（MB）
   memory_limit: 100
   # 读取缓冲区大小（bytes）
   buffer_size: 4096
+  pid_file: "/var/run/clamguardian.pid"  # 可选，默认值为 /var/run/clamguardian.pid
 
 metrics:
   enabled: true
@@ -40,4 +41,4 @@ log:
   max_age: 7
 
 status:
-  interval: 10     # 秒
+  interval: 3     # 秒

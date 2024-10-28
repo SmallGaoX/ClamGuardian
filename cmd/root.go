@@ -131,6 +131,12 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("加载配置失败: %v", err)
 	}
 
+	// 创建 PID 文件
+	if err := writePID(cfg.System.PidFile); err != nil {
+		return err
+	}
+	defer os.Remove(cfg.System.PidFile) // 程序退出时删除 PID 文件
+
 	// 初始化日志系统
 	err = logger.InitLogger(logger.LogConfig{
 		Path:       cfg.Log.Path,
