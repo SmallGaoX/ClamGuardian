@@ -1,14 +1,12 @@
 package cmd
 
 import (
-	"bufio"
-	"encoding/json"
 	"fmt"
-	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
+	"ClamGuardian/config"
+	"ClamGuardian/internal/metrics"
 	"github.com/spf13/cobra"
 )
 
@@ -23,132 +21,130 @@ func init() {
 }
 
 func runStatus(cmd *cobra.Command, args []string) error {
-	// 尝试连接到运行中的实例获取状态
-	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/metrics", 2112)) // 使用默认的 metrics 端口
+	stateManager := metrics.GetStateManager()
+	cfg, err := config.LoadConfig()
 	if err != nil {
-		return fmt.Errorf("无法连接到运行中的实例: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("获取状态失败，HTTP状态码: %d", resp.StatusCode)
+		return fmt.Errorf("加载配置失败: %v", err)
 	}
 
-	// 解析 metrics 响应
-	var (
-		memoryUsage float64
-		cpuUsage    float64
-		fileCount   int
-		matchCount  int64
-	)
+	// 基本信息
+	fmt.Println("\n=== ClamGuardian 运行状态 ===")
+	fmt.Printf("配置文件: %s\n", stateManager.GetConfigPath())
+	fmt.Printf("运行时间: %s\n", time.Since(stateManager.GetStartTime()).Round(time.Second))
 
-	scanner := bufio.NewScanner(resp.Body)
-	for scanner.Scan() {
-		line := scanner.Text()
+	// 监控配置
+	fmt.Println("\n=== 监控配置 ===")
+	fmt.Printf("监控路径: %v\n", stateManager.GetMonitoringPaths())
+	fmt.Printf("文件模式: %v\n", cfg.Monitor.Patterns)
 
-		// 跳过注释行
-		if strings.HasPrefix(line, "#") {
-			continue
-		}
+	// 系统配置
+	fmt.Println("\n=== 系统配置 ===")
+	fmt.Printf("内存限制: %dMB\n", cfg.System.MemoryLimit)
+	fmt.Printf("缓冲大小: %d bytes\n", cfg.System.BufferSize)
+	fmt.Printf("PID文件: %s\n", cfg.System.PidFile)
 
-		// 解析指标行
-		parts := strings.Split(line, " ")
-		if len(parts) != 2 {
-			continue
-		}
+	// 位置管理配置
+	fmt.Println("\n=== 位置管理 ===")
+	fmt.Printf("存储路径: %s\n", cfg.Position.StorePath)
+	fmt.Printf("更新间隔: %d秒\n", cfg.Position.UpdateInterval)
 
-		name := parts[0]
-		valueStr := parts[1]
-		value, err := strconv.ParseFloat(valueStr, 64)
-		if err != nil {
-			continue
-		}
+	// 指标配置
+	fmt.Println("\n=== 指标配置 ===")
+	fmt.Printf("指标启用: %v\n", cfg.Metrics.Enabled)
+	if cfg.Metrics.Enabled {
+		fmt.Printf("指标端口: %d\n", cfg.Metrics.Port)
+		fmt.Printf("指标路径: %s\n", cfg.Metrics.Path)
+	}
 
-		switch name {
-		case "clamguardian_memory_usage_bytes":
-			memoryUsage = value
-		case "clamguardian_cpu_usage_percent":
-			cpuUsage = value
-		case "clamguardian_processed_files_total":
-			fileCount = int(value)
-		case "clamguardian_rule_matches_total":
-			matchCount = int64(value)
+	// 日志配置
+	fmt.Println("\n=== 日志配置 ===")
+	fmt.Printf("日志路径: %s\n", cfg.Log.Path)
+	fmt.Printf("日志格式: %s\n", cfg.Log.Format)
+	fmt.Printf("日志级别: %s\n", cfg.Log.Level)
+	fmt.Printf("单文件大小限制: %dMB\n", cfg.Log.MaxSize)
+	fmt.Printf("最大备份数: %d\n", cfg.Log.MaxBackups)
+	fmt.Printf("保留天数: %d\n", cfg.Log.MaxAge)
+
+	// 匹配规则
+	fmt.Println("\n=== 匹配规则 ===")
+	if len(cfg.Matcher.Rules) == 0 {
+		fmt.Println("未配置匹配规则")
+	} else {
+		for i, rule := range cfg.Matcher.Rules {
+			fmt.Printf("%d. 模式: %s, 级别: %s\n", i+1, rule.Pattern, rule.Level)
 		}
 	}
 
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("读取metrics响应失败: %v", err)
+	// 系统状态
+	memory, cpu := stateManager.GetSystemMetrics()
+	fmt.Println("\n=== 系统状态 ===")
+	fmt.Printf("内存使用: %s\n", formatBytes(memory))
+	fmt.Printf("CPU使用率: %.2f%%\n", cpu)
+
+	// 匹配统计
+	matches := stateManager.GetTotalMatches()
+	fmt.Println("\n=== 匹配统计 ===")
+	if len(matches) == 0 {
+		fmt.Println("暂无匹配记录")
+	} else {
+		for level, count := range matches {
+			fmt.Printf("%s级别: %d次\n", level, count)
+		}
 	}
 
-	// 输出基本状态信息
-	fmt.Println("=== ClamGuardian 运行状态 ===")
-	fmt.Printf("内存使用: %.2f MB\n", memoryUsage/(1024*1024))
-	fmt.Printf("CPU使用率: %.1f%%\n", cpuUsage)
-	fmt.Printf("监控文件数: %d\n", fileCount)
-	fmt.Printf("规则匹配数: %d\n", matchCount)
-	fmt.Printf("最后更新时间: %s\n", time.Now().Format("2006-01-02 15:04:05"))
-
-	// 获取文件监控状态
+	// 文件监控状态
+	files := stateManager.GetAllFileStatus()
 	fmt.Println("\n=== 文件监控状态 ===")
-	fileResp, err := http.Get(fmt.Sprintf("http://localhost:%d/files", 2112))
-	if err != nil {
-		fmt.Println("无法获取文件监控状态")
-		return nil // 继续显示其他信息
-	}
-	defer fileResp.Body.Close()
-
-	if fileResp.StatusCode != http.StatusOK {
-		fmt.Println("获取文件监控状态失败")
-		return nil
-	}
-
-	var files []struct {
-		Filename string  `json:"filename"`
-		Position int64   `json:"position"`
-		Size     int64   `json:"size"`
-		Progress float64 `json:"progress"`
-	}
-
-	if err := json.NewDecoder(fileResp.Body).Decode(&files); err != nil {
-		fmt.Println("解析文件监控状态失败")
-		return nil
-	}
-
-	// 输出文件状态
 	if len(files) == 0 {
 		fmt.Println("当前没有监控的文件")
 		return nil
 	}
 
-	fmt.Printf("\n%-50s %-15s %-15s %s\n", "文件名", "当前位置", "文件大小", "进度")
-	fmt.Println(strings.Repeat("-", 90))
+	fmt.Printf("\n%-50s %-15s %-15s %-10s %-20s %-10s\n",
+		"文件名", "当前位置", "文件大小", "进度", "最后修改时间", "匹配数")
+	fmt.Println(strings.Repeat("-", 120))
+
 	for _, file := range files {
 		filename := file.Filename
 		if len(filename) > 50 {
 			filename = "..." + filename[len(filename)-47:]
 		}
-		fmt.Printf("%-50s %-15s %-15s %.1f%%\n",
+		fmt.Printf("%-50s %-15s %-15s %-10.1f%% %-20s %-10d\n",
 			filename,
 			formatBytes(file.Position),
 			formatBytes(file.Size),
 			file.Progress*100,
-		)
+			file.LastModified.Format("2006-01-02 15:04:05"),
+			file.MatchCount)
 	}
 
 	return nil
 }
 
-// formatBytes 格式化字节数
-func formatBytes(bytes int64) string {
-	const unit = 1024
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
+// formatBytes 格式化字节数，支持 uint64 和 int64
+func formatBytes(bytes interface{}) string {
+	var bytesInt uint64
+
+	switch v := bytes.(type) {
+	case uint64:
+		bytesInt = v
+	case int64:
+		bytesInt = uint64(v)
+	default:
+		return "unknown"
 	}
-	div, exp := int64(unit), 0
-	for n := bytes / unit; n >= unit; n /= unit {
+
+	const unit = 1024
+	if bytesInt < unit {
+		return fmt.Sprintf("%d B", bytesInt)
+	}
+
+	div, exp := uint64(unit), 0
+	for n := bytesInt / unit; n >= unit; n /= unit {
 		div *= unit
 		exp++
 	}
+
 	return fmt.Sprintf("%.1f %cB",
-		float64(bytes)/float64(div), "KMGTPE"[exp])
+		float64(bytesInt)/float64(div), "KMGTPE"[exp])
 }

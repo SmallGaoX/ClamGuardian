@@ -88,7 +88,7 @@ func initConfig() {
 		fmt.Printf("使用配置文件: %s\n", viper.ConfigFileUsed())
 	}
 
-	// 命令行参数覆盖配置文件
+	// 命令行���数覆盖配置文件
 	if len(monitorPaths) > 0 {
 		viper.Set("monitor.paths", monitorPaths)
 	}
@@ -132,6 +132,10 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("加载配置失败: %v", err)
 	}
 
+	// 加载配置后立即更新状态管理器
+	stateManager := metrics.GetStateManager()
+	stateManager.SetConfig(viper.ConfigFileUsed(), cfg.Monitor.Paths)
+
 	// 创建 PID 文件
 	if err := writePID(cfg.System.PidFile); err != nil {
 		return err
@@ -154,8 +158,10 @@ func run(cmd *cobra.Command, args []string) error {
 
 	// 现在可以安全地使用 logger
 	logger.Logger.Info("应用启动",
+		zap.String("config_file", viper.ConfigFileUsed()),
 		zap.Strings("monitor_paths", cfg.Monitor.Paths),
-		zap.Strings("patterns", cfg.Monitor.Patterns))
+		zap.Strings("patterns", cfg.Monitor.Patterns),
+		zap.Any("rules", cfg.Matcher.Rules))
 
 	// 创建位置管理器
 	pm, err := position.NewManager(cfg.Position.StorePath, cfg.Position.UpdateInterval)

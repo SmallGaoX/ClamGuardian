@@ -4,11 +4,15 @@ monitor:
     - "/var/log"
   # 文件匹配模式
   patterns:
-    - "*.log"
+    - "clamd.*"
   
 matcher:
   # 正则表达式规则
   rules:
+    - pattern: ".*OK"
+      level: "ok"
+    - pattern: ".*FOUND"
+      level: "error"
     - pattern: "error.*"
       level: "error"
     - pattern: "warning.*"

@@ -3,6 +3,7 @@ package monitor
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sync"
 
@@ -112,22 +113,29 @@ func (m *Monitor) handleEvent(event fsnotify.Event) {
 // handleFileWrite 处理文件写入事件
 func (m *Monitor) handleFileWrite(filename string) {
 	currentPos := m.posManager.GetPosition(filename)
-	logger.Logger.Debug("处理文件写入",
-		zap.String("filename", filename),
-		zap.Int64("position", currentPos))
-
-	newPos, err := m.matcher.ProcessFile(filename, currentPos)
+	fileInfo, err := os.Stat(filename)
 	if err != nil {
-		logger.Logger.Error("处理文件失败",
-			zap.String("filename", filename),
-			zap.Error(err))
+		logger.Logger.Error("获取文件信息失败", zap.Error(err))
 		return
 	}
 
+	newPos, err := m.matcher.ProcessFile(filename, currentPos)
+	if err != nil {
+		logger.Logger.Error("处理文件失败", zap.Error(err))
+		return
+	}
+
+	// 更新状态管理器
+	stateManager := metrics.GetStateManager()
+	stateManager.UpdateFileStatus(filename, &metrics.FileStatus{
+		Filename:     filename,
+		Position:     newPos,
+		Size:         fileInfo.Size(),
+		Progress:     float64(newPos) / float64(fileInfo.Size()),
+		LastModified: fileInfo.ModTime(),
+	})
+
 	m.posManager.UpdatePosition(filename, newPos)
-	logger.Logger.Debug("更新文件位置",
-		zap.String("filename", filename),
-		zap.Int64("new_position", newPos))
 }
 
 // handleFileCreate 处理文件创建事件
