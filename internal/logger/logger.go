@@ -8,6 +8,11 @@ import (
 
 var Logger *zap.Logger
 
+func init() {
+	// 创建一个默认的控制台 logger，避免在正式初始化前使用时崩溃
+	Logger, _ = zap.NewDevelopment()
+}
+
 // InitLogger 初始化日志配置
 func InitLogger(logPath string, maxSize, maxBackups, maxAge int) {
 	// 配置 lumberjack
@@ -41,6 +46,6 @@ func InitLogger(logPath string, maxSize, maxBackups, maxAge int) {
 		zap.InfoLevel,
 	)
 
-	// 创建 logger
+	// 创建新的 logger 并替换全局变量
 	Logger = zap.New(core, zap.AddCaller())
 }

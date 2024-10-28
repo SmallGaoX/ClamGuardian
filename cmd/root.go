@@ -81,10 +81,8 @@ func initConfig() {
 		viper.AddConfigPath(".")
 	}
 
-	// 读取环境变量
 	viper.AutomaticEnv()
 
-	// 如果找到配置文件，读取它
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Printf("使用配置文件: %s\n", viper.ConfigFileUsed())
 	}
@@ -133,7 +131,7 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("加载配置失败: %v", err)
 	}
 
-	// 初始化日志
+	// 初始化日志系统
 	logger.InitLogger(
 		cfg.Log.Path,
 		cfg.Log.MaxSize,
@@ -141,6 +139,11 @@ func run(cmd *cobra.Command, args []string) error {
 		cfg.Log.MaxAge,
 	)
 	defer logger.Logger.Sync()
+
+	// 现在可以安全地使用 logger
+	logger.Logger.Info("应用启动",
+		zap.Strings("monitor_paths", cfg.Monitor.Paths),
+		zap.Strings("patterns", cfg.Monitor.Patterns))
 
 	// 创建位置管理器
 	pm, err := position.NewManager(cfg.Position.StorePath, cfg.Position.UpdateInterval)
@@ -175,9 +178,10 @@ func run(cmd *cobra.Command, args []string) error {
 	// 启动状态监控
 	statusMonitor, err := status.NewMonitor(
 		time.Duration(cfg.Status.Interval)*time.Second,
-		cfg, // 传入配置对象
+		cfg,
 	)
 	if err != nil {
+		logger.Logger.Error("创建状态监控失败", zap.Error(err))
 		return fmt.Errorf("创建状态监控失败: %v", err)
 	}
 	statusMonitor.Start()
@@ -187,7 +191,11 @@ func run(cmd *cobra.Command, args []string) error {
 	if cfg.Metrics.Enabled {
 		go func() {
 			http.Handle(cfg.Metrics.Path, promhttp.Handler())
-			if err := http.ListenAndServe(fmt.Sprintf(":%d", cfg.Metrics.Port), nil); err != nil {
+			addr := fmt.Sprintf(":%d", cfg.Metrics.Port)
+			logger.Logger.Info("启动metrics服务",
+				zap.String("address", addr),
+				zap.String("path", cfg.Metrics.Path))
+			if err := http.ListenAndServe(addr, nil); err != nil {
 				logger.Logger.Error("metrics服务器启动失败", zap.Error(err))
 			}
 		}()
@@ -196,7 +204,8 @@ func run(cmd *cobra.Command, args []string) error {
 	// 等待信号
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	<-sigCh
+	sig := <-sigCh
+	logger.Logger.Info("接收到退出信号", zap.String("signal", sig.String()))
 
 	return nil
 }

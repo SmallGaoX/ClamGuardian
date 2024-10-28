@@ -38,7 +38,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("获取状态信息失败: %v", err)
 	}
 
-	// 格式化输出状态信息
+	// 输出状态信息到控制台
 	fmt.Println("=== ClamGuardian 运行状态 ===")
 	fmt.Printf("运行时间: %.1f 小时\n", info.UptimeHours)
 	fmt.Printf("内存使用: %.2f MB\n", float64(info.MemoryUsage)/(1024*1024))
@@ -47,7 +47,6 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	fmt.Printf("规则匹配数: %d\n", info.NumMatches)
 	fmt.Printf("最后更新时间: %s\n", info.Timestamp.Format("2006-01-02 15:04:05"))
 
-	// 如果启用了指标服务
 	if info.MetricsEnabled {
 		fmt.Printf("指标服务地址: http://localhost:%d%s\n", info.MetricsPort, info.MetricsPath)
 	}

@@ -6,6 +6,9 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"ClamGuardian/internal/logger"
+	"go.uber.org/zap"
 )
 
 // Manager 位置管理器
@@ -51,13 +54,25 @@ func (m *Manager) UpdatePosition(filename string, position int64) {
 func (m *Manager) load() error {
 	data, err := os.ReadFile(m.storePath)
 	if os.IsNotExist(err) {
+		logger.Logger.Info("位置文件不存在，将创建新文件",
+			zap.String("path", m.storePath))
 		return nil
 	}
 	if err != nil {
+		logger.Logger.Error("读取位置文件失败",
+			zap.String("path", m.storePath),
+			zap.Error(err))
 		return fmt.Errorf("读取位置文件失败: %v", err)
 	}
 
-	return json.Unmarshal(data, &m.positions)
+	if err := json.Unmarshal(data, &m.positions); err != nil {
+		logger.Logger.Error("解析位置文件失败", zap.Error(err))
+		return err
+	}
+
+	logger.Logger.Info("成功加载位置信息",
+		zap.Int("文件数", len(m.positions)))
+	return nil
 }
 
 // save 保存位置信息到磁盘
@@ -77,7 +92,9 @@ func (m *Manager) save() error {
 func (m *Manager) periodicUpdate() {
 	for range m.updateTimer.C {
 		if err := m.save(); err != nil {
-			fmt.Printf("保存位置信息失败: %v\n", err)
+			logger.Logger.Error("保存位置信息失败", zap.Error(err))
+		} else {
+			logger.Logger.Debug("位置信息已保存")
 		}
 		m.updateTimer.Reset(time.Duration(5) * time.Second)
 	}

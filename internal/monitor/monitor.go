@@ -6,9 +6,11 @@ import (
 	"path/filepath"
 	"sync"
 
+	"ClamGuardian/internal/logger"
 	"ClamGuardian/internal/matcher"
 	"ClamGuardian/internal/position"
 	"github.com/fsnotify/fsnotify"
+	"go.uber.org/zap"
 )
 
 // Monitor 文件监控器
@@ -58,17 +60,20 @@ func (m *Monitor) watch(ctx context.Context) {
 		select {
 		case event, ok := <-m.watcher.Events:
 			if !ok {
+				logger.Logger.Info("监控事件通道已关闭")
 				return
 			}
 			m.handleEvent(event)
 
 		case err, ok := <-m.watcher.Errors:
 			if !ok {
+				logger.Logger.Info("监控错误通道已关闭")
 				return
 			}
-			fmt.Printf("监控错误: %v\n", err)
+			logger.Logger.Error("监控错误", zap.Error(err))
 
 		case <-ctx.Done():
+			logger.Logger.Info("监控服务停止")
 			return
 		}
 	}
@@ -104,44 +109,51 @@ func (m *Monitor) handleEvent(event fsnotify.Event) {
 
 // handleFileWrite 处理文件写入事件
 func (m *Monitor) handleFileWrite(filename string) {
-	// 获取当前文件位置
 	currentPos := m.posManager.GetPosition(filename)
+	logger.Logger.Debug("处理文件写入",
+		zap.String("filename", filename),
+		zap.Int64("position", currentPos))
 
-	// 处理文件内容
 	newPos, err := m.matcher.ProcessFile(filename, currentPos)
 	if err != nil {
-		fmt.Printf("处理文件失败 %s: %v\n", filename, err)
+		logger.Logger.Error("处理文件失败",
+			zap.String("filename", filename),
+			zap.Error(err))
 		return
 	}
 
-	// 更新文件位置
 	m.posManager.UpdatePosition(filename, newPos)
+	logger.Logger.Debug("更新文件位置",
+		zap.String("filename", filename),
+		zap.Int64("new_position", newPos))
 }
 
 // handleFileCreate 处理文件创建事件
 func (m *Monitor) handleFileCreate(filename string) {
-	// 对于新创建的文件，从头开始读取
+	logger.Logger.Info("检测到新文件",
+		zap.String("filename", filename))
+
 	newPos, err := m.matcher.ProcessFile(filename, 0)
 	if err != nil {
-		fmt.Printf("处理新文件失败 %s: %v\n", filename, err)
+		logger.Logger.Error("处理新文件失败",
+			zap.String("filename", filename),
+			zap.Error(err))
 		return
 	}
 
-	// 更新文件位置
 	m.posManager.UpdatePosition(filename, newPos)
-
-	// 添加到监控列表
 	if err := m.watcher.Add(filename); err != nil {
-		fmt.Printf("添加文件到监控失败 %s: %v\n", filename, err)
+		logger.Logger.Error("添加文件到监控失败",
+			zap.String("filename", filename),
+			zap.Error(err))
 	}
 }
 
 // handleFileRemove 处理文件删除事件
 func (m *Monitor) handleFileRemove(filename string) {
-	// 从监控列表中移除
+	logger.Logger.Info("文件被删除",
+		zap.String("filename", filename))
 	m.watcher.Remove(filename)
-
-	// 从位置管理器中移除记录
 	m.posManager.RemovePosition(filename)
 }
 
