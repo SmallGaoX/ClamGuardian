@@ -22,7 +22,7 @@ position:
 
 system:
   # 内存限制（MB）
-  memory_limit: 100
+  memory_limit: 10
   # 读取缓冲区大小（bytes）
   buffer_size: 4096
   pid_file: "/var/run/clamguardian.pid"  # 可选，默认值为 /var/run/clamguardian.pid

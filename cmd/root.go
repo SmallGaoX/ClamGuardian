@@ -235,10 +235,13 @@ func monitorMemory(limit int64) {
 		case <-ticker.C:
 			var stats runtime.MemStats
 			runtime.ReadMemStats(&stats)
-
+			logger.Logger.Debug("内存使用情况", zap.Any("memStats", stats.Alloc))
 			if stats.Alloc > uint64(limit*1024*1024) {
 				fmt.Printf("警告: 内存使用超过限制 (当前: %dMB, 限制: %dMB)\n",
 					stats.Alloc/(1024*1024), limit)
+				logger.Logger.Warn("内存使用超过限制",
+					zap.Int64("current", int64(stats.Alloc/(1024*1024))),
+					zap.Int64("limit", limit))
 				runtime.GC()
 			}
 
