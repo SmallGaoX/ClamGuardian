@@ -84,8 +84,8 @@ func initConfig() {
 
 	viper.AutomaticEnv()
 
-	if err := viper.ReadInConfig(); err == nil {
-		fmt.Printf("使用配置文件: %s\n", viper.ConfigFileUsed())
+	if err := viper.ReadInConfig(); err != nil {
+		fmt.Errorf("读取配置文件失败: %v", err.Error())
 	}
 
 	// 命令行参数覆盖配置文件
