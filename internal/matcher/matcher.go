@@ -7,9 +7,7 @@ import (
 	"regexp"
 	"sync"
 
-	"ClamGuardian/internal/logger"
 	"ClamGuardian/internal/metrics"
-	"go.uber.org/zap"
 )
 
 // MatchRule 定义匹配规则的结构
@@ -98,9 +96,9 @@ func (m *Matcher) matchLine(line string) {
 			m.mu.Unlock()
 
 			metrics.RuleMatches.WithLabelValues(rule.Level).Inc()
-			logger.Logger.Info("匹配到告警",
-				zap.String("level", rule.Level),
-				zap.String("content", line))
+			// logger.Logger.Info("匹配到告警",
+			// 	zap.String("level", rule.Level),
+			// 	zap.String("content", line))
 		}
 	}
 }

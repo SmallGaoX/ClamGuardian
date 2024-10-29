@@ -39,8 +39,9 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	var (
 		memoryUsage float64
 		cpuUsage    float64
+		systemCpu   float64
 		fileCount   int
-		matchCount  int64
+		matchCount  []int64
 	)
 
 	scanner := bufio.NewScanner(resp.Body)
@@ -66,14 +67,16 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		}
 
 		switch name {
-		case "clamguardian_memory_usage_bytes":
+		case "clam_guardian_memory_usage_bytes":
 			memoryUsage = value
-		case "clamguardian_cpu_usage_percent":
+		case "clam_guardian_cpu_usage_percent":
 			cpuUsage = value
-		case "clamguardian_processed_files_total":
+		case "clam_guardian_system_cpu_usage_percent":
+			systemCpu = value
+		case "clam_guardian_processed_files_total":
 			fileCount = int(value)
-		case "clamguardian_rule_matches_total":
-			matchCount = int64(value)
+		case "clam_guardian_rule_matches_total":
+			matchCount = append(matchCount, int64(value))
 		}
 	}
 
@@ -85,6 +88,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	fmt.Println("=== ClamGuardian 运行状态 ===")
 	fmt.Printf("内存使用: %.2f MB\n", memoryUsage/(1024*1024))
 	fmt.Printf("CPU使用率: %.1f%%\n", cpuUsage)
+	fmt.Printf("系统CPU使用率: %.1f%%\n", systemCpu)
 	fmt.Printf("监控文件数: %d\n", fileCount)
 	fmt.Printf("规则匹配数: %d\n", matchCount)
 	fmt.Printf("最后更新时间: %s\n", time.Now().Format("2006-01-02 15:04:05"))

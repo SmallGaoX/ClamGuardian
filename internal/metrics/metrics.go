@@ -8,7 +8,7 @@ import (
 var (
 	// MemoryUsage 内存使用指标
 	MemoryUsage = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "clamguardian_memory_usage_bytes",
+		Name: "clam_guardian_memory_usage_bytes",
 		Help: "当前应用程序使用的内存量(字节)",
 	})
 
