@@ -80,9 +80,17 @@ func (m *Monitor) collect() {
 
 			// 收集系统CPU使用情况
 			if systemCPU, err := cpu.Percent(0, false); err == nil && len(systemCPU) > 0 {
+				metrics.SystemCPU.Set(systemCPU[0])
 				logger.Logger.Debug("系统CPU使用情况",
 					zap.Float64("system_cpu_percent", systemCPU[0]))
 			}
+
+			// 收集程序运行时间
+			if createTime, err := m.proc.CreateTime(); err == nil {
+				uptime := time.Since(time.Unix(createTime/1000, 0))
+				metrics.UpTime.Set(uptime.Seconds())
+			}
+
 		}
 	}
 }

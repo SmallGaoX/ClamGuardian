@@ -18,6 +18,12 @@ var (
 		Help: "当前应用程序的CPU使用率",
 	})
 
+	// SystemCPU 系统CPU使用指标
+	SystemCPU = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "clam_guardian_system_cpu_usage_percent",
+		Help: "当前系统的CPU使用率",
+	})
+
 	// ProcessedFiles 已处理文件数
 	ProcessedFiles = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "clam_guardian_processed_files_total",
@@ -32,4 +38,9 @@ var (
 		},
 		[]string{"level"},
 	)
+	// UpTime 应用程序运行时间
+	UpTime = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "clam_guardian_uptime_seconds",
+		Help: "应用程序运行时间(秒)",
+	})
 )

@@ -58,7 +58,7 @@ func init() {
 
 	// Monitor 配置
 	rootCmd.Flags().StringSliceVar(&monitorPaths, "paths", []string{}, "要监控的目录路径列表")
-	rootCmd.Flags().StringSliceVar(&monitorPatterns, "patterns", []string{"*.log"}, "文件匹配模式列表")
+	rootCmd.Flags().StringSliceVar(&monitorPatterns, "patterns", []string{}, "文件匹配模式列表")
 
 	// Position 配置
 	rootCmd.Flags().StringVar(&positionStorePath, "position-store", "positions.json", "位置存储文件路径")
